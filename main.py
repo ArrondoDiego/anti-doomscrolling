@@ -148,34 +148,21 @@ with FaceLandmarker.create_from_options(face_options) as landmarker:
         if phone_detected:
             cv2.putText(frame, "PHONE", (w-110, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
 
-        face_should_play = False
-        if distracted:
-            if last_distracted_time is None:
-                last_distracted_time = time.time()
-            elapsed = time.time() - last_distracted_time
-            if time.time() - last_log_time > 0.5:
-                print(f"[{time.strftime('%H:%M:%S')}] DISTRACTION {elapsed:.1f}s/{DISTRACTION_SECONDS}s h_off:{h_off:.2f} phone:{phone_detected}")
-                last_log_time = time.time()
-            if elapsed >= DISTRACTION_SECONDS:
-                face_should_play = True
-        else:
-            if last_distracted_time is not None:
-                print(f"[{time.strftime('%H:%M:%S')}] Gaze recovered - timer reset")
-            last_distracted_time = None
+        if time.time() - last_log_time > 0.5 and (distracted or phone_detected):
+            print(f"[{time.strftime('%H:%M:%S')}] h_off:{h_off:.2f} phone:{phone_detected} distracted:{distracted}")
+            last_log_time = time.time()
 
         phone_should_play = phone_detected
-        should_play = face_should_play or phone_should_play
+        should_play = phone_should_play
 
         if should_play and not is_playing_meme:
-            reason = "PHONE" if phone_should_play else "FACE"
-            print(f"[{time.strftime('%H:%M:%S')}] TRIGGER MEME ({reason})")
+            print(f"[{time.strftime('%H:%M:%S')}] TRIGGER MEME (PHONE)")
             if os.path.exists(VIDEO_PATH):
                 video_cap = cv2.VideoCapture(VIDEO_PATH)
                 audio_player = MediaPlayer(VIDEO_PATH)
                 is_playing_meme = True
         elif not should_play and is_playing_meme:
-            reason = "phone put away" if not phone_detected and not face_should_play else "focused"
-            print(f"[{time.strftime('%H:%M:%S')}] STOP MEME ({reason})")
+            print(f"[{time.strftime('%H:%M:%S')}] STOP MEME (phone put away)")
             if video_cap:
                 video_cap.release()
                 video_cap = None
