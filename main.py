@@ -38,7 +38,16 @@ options = FaceLandmarkerOptions(
 )
 
 cap = cv2.VideoCapture(0)
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+cap.set(cv2.CAP_PROP_FPS, 30)
+cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 last_distracted_time = None
+last_log_time = 0
+frame_idx = 0
+cached_distracted = False
+cached_h_off = 0.0
+h_off = 0.0
 
 # Variabili gestione video meme
 video_cap = None
@@ -53,52 +62,52 @@ with FaceLandmarker.create_from_options(options) as landmarker:
 
         frame = cv2.flip(frame, 1)
         h, w, _ = frame.shape
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
-
-        timestamp_ms = int(time.time() * 1000)
-        detection_result = landmarker.detect_for_video(mp_image, timestamp_ms)
-
-        distracted = False
-
-        if detection_result.face_landmarks:
-            landmarks = detection_result.face_landmarks[0]
-            # lx = [landmarks[i].x * w for i in [33, 133, 160, 159, 158, 144, 145, 153]]
-            # ly = [landmarks[i].y * h for i in [33, 133, 160, 159, 158, 144, 145, 153]]
-            # rx = [landmarks[i].x * w for i in [362, 263, 385, 386, 387, 373, 374, 380]]
-            # ry = [landmarks[i].y * h for i in [362, 263, 385, 386, 387, 373, 374, 380]]
-            # cv2.rectangle(frame, (int(min(lx)), int(min(ly))), (int(max(lx)), int(max(ly))), (0, 255, 0), 2)
-            # cv2.rectangle(frame, (int(min(rx)), int(min(ry))), (int(max(rx)), int(max(ry))), (0, 255, 0), 2)
-            nose = landmarks[1]
-            forehead = landmarks[10]
-            chin = landmarks[152]
-
-            face_height = chin.y - forehead.y
-            if face_height > 0:
-                nose_ratio = (nose.y - forehead.y) / face_height
-                if nose_ratio > 0.68 or chin.y > 0.85:
-                    distracted = True
-            left_x = landmarks[33].x
-            right_x = landmarks[263].x
-            eye_w = right_x - left_x
-            if eye_w > 0:
-                cx = (left_x + right_x) / 2
-                h_off = abs(nose.x - cx) / eye_w
-                if h_off > 0.18:
-                    distracted = True
+        frame_idx += 1
+        if frame_idx % 2 == 0:
+            small = cv2.resize(frame, (320, 240))
+            rgb_frame = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
+            timestamp_ms = int(time.time() * 1000)
+            detection_result = landmarker.detect_for_video(mp_image, timestamp_ms)
+            distracted = False
+            h_off = 0
+            if detection_result.face_landmarks:
+                landmarks = detection_result.face_landmarks[0]
+                nose = landmarks[1]
+                forehead = landmarks[10]
+                chin = landmarks[152]
+                face_height = chin.y - forehead.y
+                if face_height > 0:
+                    nose_ratio = (nose.y - forehead.y) / face_height
+                    if nose_ratio > 0.68 or chin.y > 0.85:
+                        distracted = True
+                left_x = landmarks[33].x
+                right_x = landmarks[263].x
+                eye_w = right_x - left_x
+                if eye_w > 0:
+                    cx = (left_x + right_x) / 2
+                    h_off = abs(nose.x - cx) / eye_w
+                    if h_off > 0.18:
+                        distracted = True
                 cv2.putText(frame, f"h_off:{h_off:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+            else:
+                distracted = True
+            cached_distracted = distracted
+            cached_h_off = h_off
         else:
-            distracted = True
+            distracted = cached_distracted
+            h_off = cached_h_off
 
         if not is_playing_meme:
             if distracted:
-                print(f"[{time.strftime('%H:%M:%S')}] DISTRAZIONE rilevata - sguardo fuori schermo")
                 if last_distracted_time is None:
                     last_distracted_time = time.time()
                 elapsed = time.time() - last_distracted_time
-                print(f"  -> distratto da {elapsed:.1f}s / {DISTRACTION_SECONDS}s")
+                if time.time() - last_log_time > 0.5:
+                    print(f"[{time.strftime('%H:%M:%S')}] DISTRAZIONE {elapsed:.1f}s/{DISTRACTION_SECONDS}s h_off:{h_off:.2f}")
+                    last_log_time = time.time()
                 if elapsed >= DISTRACTION_SECONDS:
-                    print(f"[{time.strftime('%H:%M:%S')}] TRIGGER MEME - distrazione > {DISTRACTION_SECONDS}s")
+                    print(f"[{time.strftime('%H:%M:%S')}] TRIGGER MEME")
                     if os.path.exists(VIDEO_PATH):
                         video_cap = cv2.VideoCapture(VIDEO_PATH)
                         audio_player = MediaPlayer(VIDEO_PATH)
@@ -122,15 +131,15 @@ with FaceLandmarker.create_from_options(options) as landmarker:
                 is_playing_meme = False
                 last_distracted_time = None
 
+        wait_ms = 1
         # Riproduzione video meme - si ferma se torni concentrato
         if is_playing_meme and video_cap is not None:
             v_ret, v_frame = video_cap.read()
             audio_frame, val = audio_player.get_frame() if audio_player else (None, 0)
-
             if v_ret:
                 cv2.imshow("MEME ALERT", v_frame)
                 if val != "eof" and val > 0:
-                    time.sleep(val)
+                    wait_ms = max(1, int(val * 1000))
             else:
                 # Video terminato
                 video_cap.release()
@@ -140,7 +149,7 @@ with FaceLandmarker.create_from_options(options) as landmarker:
                 last_distracted_time = None
 
         cv2.imshow("Anti Distrazione", frame)
-        if cv2.waitKey(1) & 0xFF == ord("q"):
+        if cv2.waitKey(wait_ms) & 0xFF == ord("q"):
             break
         if cv2.getWindowProperty("Anti Distrazione", cv2.WND_PROP_VISIBLE) < 1:
             break
