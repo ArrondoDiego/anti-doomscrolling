@@ -44,12 +44,15 @@ jobs:
       - name: Package macOS
         if: runner.os == 'macOS'
         run: |
+          cd dist && ditto -c -k --sequesterRsrc --keepParent "${{ matrix.target }}" ../${{ matrix.artifact }}.zip && cd ..
           cd dist && tar czf ../${{ matrix.artifact }}.tar.gz "${{ matrix.target }}" && cd ..
-          ls -lh *.tar.gz
+          ls -lh *.zip *.tar.gz
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: ${{ matrix.artifact }}.tar.gz
+          path: |
+            ${{ matrix.artifact }}.zip
+            ${{ matrix.artifact }}.tar.gz
 
   release:
     needs: build
@@ -63,7 +66,7 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/**/*.tar.gz
+          files: artifacts/**/*.{tar.gz,zip}
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
