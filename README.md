@@ -1,34 +1,34 @@
-# Doomscroll - Anti Distrazione
+# Doomscroll - Anti Distraction
 
-App che rileva quando ti distrai (sguardo in basso o fuori schermo) e fa partire un meme. Torni concentrato? Il video si ferma.
+App that detects when you get distracted (looking down or off-screen) and plays a meme. Regain focus? The video stops.
 
-## Come funziona
-- **MediaPipe Face Landmarker** per tracking volto
-- Sguardo distratto se: `nose_ratio > 0.68` / `chin.y > 0.85` (in basso) o `h_off > 0.18` (laterale) o volto assente
-- Dopo `1.5s` di distrazione → `video.mp4` in finestra `MEME ALERT`
-- Ritorno concentrato → stop immediato
+## How it works
+- **MediaPipe Face Landmarker** for face tracking
+- Distracted gaze if: `nose_ratio > 0.68` / `chin.y > 0.85` (looking down) or `h_off > 0.18` (sideways) or face absent
+- After `1.5s` of distraction → `video.mp4` in `MEME ALERT` window
+- Focus regained → immediate stop
 
-## Uso
+## Usage
 ```bash
 pip install -r requirements.txt
 python main.py
-# q o X per chiudere
+# q or X to close
 ```
 
-## Build eseguibile (1 comando)
+## Build executable (1 command)
 ```bash
 ./build.sh
-# output: dist/Doomscroll / dist/Doomscroll.app (su macOS)
+# output: dist/Doomscroll / dist/Doomscroll.app (on macOS)
 ```
-Richiede build **su Mac** per macOS (`brew install sdl2` gestito dallo script).
+Requires building **on Mac** for macOS (`brew install sdl2` handled by the script).
 
 ## Repo
 ```bash
 git clone <url> && cd doomscroll
 ```
 
-## File
+## Files
 - `main.py` - app
-- `video.mp4` - meme (sostituibile)
-- `doomscroll.spec` - config PyInstaller
-- `face_landmarker.task` - auto-scaricato se assente
+- `video.mp4` - meme (replaceable)
+- `doomscroll.spec` - PyInstaller config
+- `face_landmarker.task` - auto-downloaded if missing

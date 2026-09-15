@@ -48,7 +48,7 @@ app = BUNDLE(
     icon=None,
     bundle_identifier='com.doomscroll.app',
     info_plist={
-        'NSCameraUsageDescription': 'Doomscroll usa la camera per rilevare la distrazione',
+        'NSCameraUsageDescription': 'Doomscroll uses the camera to detect distraction',
         'NSHighResolutionCapable': 'True',
     },
 )

@@ -15,21 +15,21 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 
-# Download automatico del modello se assente
+# Auto-download model if missing
 MODEL_PATH = resource_path("face_landmarker.task")
 MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
 if not os.path.exists(MODEL_PATH):
-    print("Download modello MediaPipe in corso...")
+    print("Downloading MediaPipe model...")
     urllib.request.urlretrieve(MODEL_URL, MODEL_PATH)
 
 PHONE_MODEL_PATH = resource_path("efficientdet_lite0.tflite")
 PHONE_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float32/1/efficientdet_lite0.tflite"
 if not os.path.exists(PHONE_MODEL_PATH):
-    print("Download modello ObjectDetector in corso...")
+    print("Downloading ObjectDetector model...")
     try:
         urllib.request.urlretrieve(PHONE_MODEL_URL, PHONE_MODEL_PATH)
     except Exception as e:
-        print(f"Impossibile scaricare phone detector: {e}")
+        print(f"Failed to download phone detector: {e}")
 
 VIDEO_PATH = resource_path("video.mp4")
 DISTRACTION_SECONDS = 1.5
@@ -68,7 +68,7 @@ cached_phone = False
 h_off = 0.0
 phone_detected = False
 
-# Variabili gestione video meme
+# Meme video playback variables
 video_cap = None
 audio_player = None
 is_playing_meme = False
@@ -77,9 +77,9 @@ phone_detector = None
 if os.path.exists(PHONE_MODEL_PATH):
     try:
         phone_detector = ObjectDetector.create_from_options(phone_options)
-        print("Phone detector pronto")
+        print("Phone detector ready")
     except Exception as e:
-        print(f"Phone detector non disponibile: {e}")
+        print(f"Phone detector unavailable: {e}")
 
 with FaceLandmarker.create_from_options(face_options) as landmarker:
     while cap.isOpened():
@@ -154,27 +154,27 @@ with FaceLandmarker.create_from_options(face_options) as landmarker:
                 last_distracted_time = time.time()
             elapsed = time.time() - last_distracted_time
             if time.time() - last_log_time > 0.5:
-                print(f"[{time.strftime('%H:%M:%S')}] DISTRAZIONE {elapsed:.1f}s/{DISTRACTION_SECONDS}s h_off:{h_off:.2f} phone:{phone_detected}")
+                print(f"[{time.strftime('%H:%M:%S')}] DISTRACTION {elapsed:.1f}s/{DISTRACTION_SECONDS}s h_off:{h_off:.2f} phone:{phone_detected}")
                 last_log_time = time.time()
             if elapsed >= DISTRACTION_SECONDS:
                 face_should_play = True
         else:
             if last_distracted_time is not None:
-                print(f"[{time.strftime('%H:%M:%S')}] Sguardo tornato - reset timer")
+                print(f"[{time.strftime('%H:%M:%S')}] Gaze recovered - timer reset")
             last_distracted_time = None
 
         phone_should_play = phone_detected
         should_play = face_should_play or phone_should_play
 
         if should_play and not is_playing_meme:
-            reason = "PHONE" if phone_should_play else "VOLTO"
+            reason = "PHONE" if phone_should_play else "FACE"
             print(f"[{time.strftime('%H:%M:%S')}] TRIGGER MEME ({reason})")
             if os.path.exists(VIDEO_PATH):
                 video_cap = cv2.VideoCapture(VIDEO_PATH)
                 audio_player = MediaPlayer(VIDEO_PATH)
                 is_playing_meme = True
         elif not should_play and is_playing_meme:
-            reason = "posato telefono" if not phone_detected and not face_should_play else "concentrato"
+            reason = "phone put away" if not phone_detected and not face_should_play else "focused"
             print(f"[{time.strftime('%H:%M:%S')}] STOP MEME ({reason})")
             if video_cap:
                 video_cap.release()
@@ -189,7 +189,7 @@ with FaceLandmarker.create_from_options(face_options) as landmarker:
             last_distracted_time = None
 
         wait_ms = 1
-        # Riproduzione video meme - si ferma se torni concentrato
+        # Meme video playback - stops when focus returns
         if is_playing_meme and video_cap is not None:
             v_ret, v_frame = video_cap.read()
             audio_frame, val = audio_player.get_frame() if audio_player else (None, 0)
@@ -198,17 +198,17 @@ with FaceLandmarker.create_from_options(face_options) as landmarker:
                 if val != "eof" and val > 0:
                     wait_ms = max(1, int(val * 1000))
             else:
-                # Video terminato
+                # Video ended
                 video_cap.release()
                 audio_player = None
                 cv2.destroyWindow("MEME ALERT")
                 is_playing_meme = False
                 last_distracted_time = None
 
-        cv2.imshow("Anti Distrazione", frame)
+        cv2.imshow("Anti Distraction", frame)
         if cv2.waitKey(wait_ms) & 0xFF == ord("q"):
             break
-        if cv2.getWindowProperty("Anti Distrazione", cv2.WND_PROP_VISIBLE) < 1:
+        if cv2.getWindowProperty("Anti Distraction", cv2.WND_PROP_VISIBLE) < 1:
             break
         if is_playing_meme and cv2.getWindowProperty("MEME ALERT", cv2.WND_PROP_VISIBLE) < 1:
             cv2.destroyWindow("MEME ALERT")
