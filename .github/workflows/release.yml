@@ -32,6 +32,11 @@ jobs:
           pip install -U pip
           pip install -r requirements.txt
           pip install pyinstaller
+      - name: Download models
+        run: |
+          python -c "import urllib.request, os; url='https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task'; path='face_landmarker.task'; print('face', url); urllib.request.urlretrieve(url, path) if not os.path.exists(path) else print('face exists')"
+          python -c "import urllib.request, os; url='https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float32/1/efficientdet_lite0.tflite'; path='efficientdet_lite0.tflite'; print('phone', url); urllib.request.urlretrieve(url, path) if not os.path.exists(path) else print('phone exists')"
+          ls -lh *.task *.tflite || true
       - name: Build
         run: |
           pyinstaller --clean --noconfirm doomscroll.spec

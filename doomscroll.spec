@@ -6,7 +6,7 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[('face_landmarker.task', '.'), ('video.mp4', '.')],
+    datas=[('face_landmarker.task', '.'), ('efficientdet_lite0.tflite', '.'), ('video.mp4', '.')],
     hiddenimports=['mediapipe', 'cv2', 'ffpyplayer.player'],
     hookspath=[],
     hooksconfig={},

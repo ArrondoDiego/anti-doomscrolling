@@ -7,3 +7,4 @@ build/
 *.log
 .DS_Store
 face_landmarker.task
+efficientdet_lite0.tflite

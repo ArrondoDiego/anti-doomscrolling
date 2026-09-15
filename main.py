@@ -22,6 +22,15 @@ if not os.path.exists(MODEL_PATH):
     print("Download modello MediaPipe in corso...")
     urllib.request.urlretrieve(MODEL_URL, MODEL_PATH)
 
+PHONE_MODEL_PATH = resource_path("efficientdet_lite0.tflite")
+PHONE_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float32/1/efficientdet_lite0.tflite"
+if not os.path.exists(PHONE_MODEL_PATH):
+    print("Download modello ObjectDetector in corso...")
+    try:
+        urllib.request.urlretrieve(PHONE_MODEL_URL, PHONE_MODEL_PATH)
+    except Exception as e:
+        print(f"Impossibile scaricare phone detector: {e}")
+
 VIDEO_PATH = resource_path("video.mp4")
 DISTRACTION_SECONDS = 1.5
 
@@ -29,12 +38,20 @@ DISTRACTION_SECONDS = 1.5
 BaseOptions = mp.tasks.BaseOptions
 FaceLandmarker = mp.tasks.vision.FaceLandmarker
 FaceLandmarkerOptions = mp.tasks.vision.FaceLandmarkerOptions
+ObjectDetector = mp.tasks.vision.ObjectDetector
+ObjectDetectorOptions = mp.tasks.vision.ObjectDetectorOptions
 VisionRunningMode = mp.tasks.vision.RunningMode
 
-options = FaceLandmarkerOptions(
+face_options = FaceLandmarkerOptions(
     base_options=BaseOptions(model_asset_path=MODEL_PATH),
     running_mode=VisionRunningMode.VIDEO,
     num_faces=1,
+)
+phone_options = ObjectDetectorOptions(
+    base_options=BaseOptions(model_asset_path=PHONE_MODEL_PATH),
+    score_threshold=0.5,
+    max_results=5,
+    running_mode=VisionRunningMode.VIDEO,
 )
 
 cap = cv2.VideoCapture(0)
@@ -47,14 +64,24 @@ last_log_time = 0
 frame_idx = 0
 cached_distracted = False
 cached_h_off = 0.0
+cached_phone = False
 h_off = 0.0
+phone_detected = False
 
 # Variabili gestione video meme
 video_cap = None
 audio_player = None
 is_playing_meme = False
 
-with FaceLandmarker.create_from_options(options) as landmarker:
+phone_detector = None
+if os.path.exists(PHONE_MODEL_PATH):
+    try:
+        phone_detector = ObjectDetector.create_from_options(phone_options)
+        print("Phone detector pronto")
+    except Exception as e:
+        print(f"Phone detector non disponibile: {e}")
+
+with FaceLandmarker.create_from_options(face_options) as landmarker:
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
@@ -63,11 +90,11 @@ with FaceLandmarker.create_from_options(options) as landmarker:
         frame = cv2.flip(frame, 1)
         h, w, _ = frame.shape
         frame_idx += 1
+        timestamp_ms = int(time.time() * 1000)
         if frame_idx % 2 == 0:
             small = cv2.resize(frame, (320, 240))
             rgb_frame = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
             mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
-            timestamp_ms = int(time.time() * 1000)
             detection_result = landmarker.detect_for_video(mp_image, timestamp_ms)
             distracted = False
             h_off = 0
@@ -94,42 +121,72 @@ with FaceLandmarker.create_from_options(options) as landmarker:
                 distracted = True
             cached_distracted = distracted
             cached_h_off = h_off
+            phone_detected = cached_phone
         else:
+            if phone_detector is not None:
+                small_p = cv2.resize(frame, (320, 240))
+                rgb_p = cv2.cvtColor(small_p, cv2.COLOR_BGR2RGB)
+                mp_image_p = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_p)
+                phone_result = phone_detector.detect_for_video(mp_image_p, timestamp_ms)
+                phone_detected = False
+                for det in phone_result.detections:
+                    for cat in det.categories:
+                        if cat.category_name == "cell phone" and cat.score > 0.5:
+                            phone_detected = True
+                            box = det.bounding_box
+                            x1 = int(box.origin_x * w / 320)
+                            y1 = int(box.origin_y * h / 240)
+                            x2 = int((box.origin_x + box.width) * w / 320)
+                            y2 = int((box.origin_y + box.height) * h / 240)
+                            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 255), 2)
+                            cv2.putText(frame, f"phone {cat.score:.2f}", (x1, max(15, y1-5)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+            else:
+                phone_detected = False
+            cached_phone = phone_detected
             distracted = cached_distracted
             h_off = cached_h_off
+        if phone_detected:
+            cv2.putText(frame, "PHONE", (w-110, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
 
-        if not is_playing_meme:
-            if distracted:
-                if last_distracted_time is None:
-                    last_distracted_time = time.time()
-                elapsed = time.time() - last_distracted_time
-                if time.time() - last_log_time > 0.5:
-                    print(f"[{time.strftime('%H:%M:%S')}] DISTRAZIONE {elapsed:.1f}s/{DISTRACTION_SECONDS}s h_off:{h_off:.2f}")
-                    last_log_time = time.time()
-                if elapsed >= DISTRACTION_SECONDS:
-                    print(f"[{time.strftime('%H:%M:%S')}] TRIGGER MEME")
-                    if os.path.exists(VIDEO_PATH):
-                        video_cap = cv2.VideoCapture(VIDEO_PATH)
-                        audio_player = MediaPlayer(VIDEO_PATH)
-                        is_playing_meme = True
-            else:
-                if last_distracted_time is not None:
-                    print(f"[{time.strftime('%H:%M:%S')}] Sguardo tornato - reset timer")
-                last_distracted_time = None
+        face_should_play = False
+        if distracted:
+            if last_distracted_time is None:
+                last_distracted_time = time.time()
+            elapsed = time.time() - last_distracted_time
+            if time.time() - last_log_time > 0.5:
+                print(f"[{time.strftime('%H:%M:%S')}] DISTRAZIONE {elapsed:.1f}s/{DISTRACTION_SECONDS}s h_off:{h_off:.2f} phone:{phone_detected}")
+                last_log_time = time.time()
+            if elapsed >= DISTRACTION_SECONDS:
+                face_should_play = True
         else:
-            if not distracted:
-                print(f"[{time.strftime('%H:%M:%S')}] CONCENTRATO - stop meme")
-                if video_cap:
-                    video_cap.release()
-                    video_cap = None
-                if audio_player:
-                    audio_player = None
-                try:
-                    cv2.destroyWindow("MEME ALERT")
-                except cv2.error:
-                    pass
-                is_playing_meme = False
-                last_distracted_time = None
+            if last_distracted_time is not None:
+                print(f"[{time.strftime('%H:%M:%S')}] Sguardo tornato - reset timer")
+            last_distracted_time = None
+
+        phone_should_play = phone_detected
+        should_play = face_should_play or phone_should_play
+
+        if should_play and not is_playing_meme:
+            reason = "PHONE" if phone_should_play else "VOLTO"
+            print(f"[{time.strftime('%H:%M:%S')}] TRIGGER MEME ({reason})")
+            if os.path.exists(VIDEO_PATH):
+                video_cap = cv2.VideoCapture(VIDEO_PATH)
+                audio_player = MediaPlayer(VIDEO_PATH)
+                is_playing_meme = True
+        elif not should_play and is_playing_meme:
+            reason = "posato telefono" if not phone_detected and not face_should_play else "concentrato"
+            print(f"[{time.strftime('%H:%M:%S')}] STOP MEME ({reason})")
+            if video_cap:
+                video_cap.release()
+                video_cap = None
+            if audio_player:
+                audio_player = None
+            try:
+                cv2.destroyWindow("MEME ALERT")
+            except cv2.error:
+                pass
+            is_playing_meme = False
+            last_distracted_time = None
 
         wait_ms = 1
         # Riproduzione video meme - si ferma se torni concentrato
@@ -162,6 +219,11 @@ with FaceLandmarker.create_from_options(options) as landmarker:
             audio_player = None
             last_distracted_time = None
 
+if phone_detector:
+    try:
+        phone_detector.close()
+    except:
+        pass
 if video_cap:
     video_cap.release()
 cap.release()
