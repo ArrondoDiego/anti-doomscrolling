@@ -1,0 +1,69 @@
+name: Release
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: Doomscroll-linux
+            target: Doomscroll
+          - os: macos-latest
+            artifact: Doomscroll-macos
+            target: Doomscroll.app
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: System deps Linux
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libsdl2-dev libsdl2-mixer-dev ffmpeg pkg-config
+      - name: System deps macOS
+        if: runner.os == 'macOS'
+        run: brew install sdl2 sdl2_mixer ffmpeg pkg-config || true
+      - name: Python deps
+        run: |
+          pip install -U pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+      - name: Build
+        run: |
+          pyinstaller --clean --noconfirm doomscroll.spec
+          ls -R dist
+      - name: Package Linux
+        if: runner.os == 'Linux'
+        run: |
+          cd dist && tar czf ../${{ matrix.artifact }}.tar.gz ${{ matrix.target }} && cd ..
+          ls -lh *.tar.gz
+      - name: Package macOS
+        if: runner.os == 'macOS'
+        run: |
+          cd dist && tar czf ../${{ matrix.artifact }}.tar.gz "${{ matrix.target }}" && cd ..
+          ls -lh *.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}.tar.gz
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*.tar.gz
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
