@@ -1,7 +1,6 @@
 import os
 import sys
 import time
-import urllib.request
 import cv2
 from ffpyplayer.player import MediaPlayer
 import mediapipe as mp
@@ -15,21 +14,13 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 
-# Auto-download model if missing
 MODEL_PATH = resource_path("face_landmarker.task")
-MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
 if not os.path.exists(MODEL_PATH):
-    print("Downloading MediaPipe model...")
-    urllib.request.urlretrieve(MODEL_URL, MODEL_PATH)
+    raise FileNotFoundError("face_landmarker.task not found - download it during build (see release.yml)")
 
 PHONE_MODEL_PATH = resource_path("efficientdet_lite0.tflite")
-PHONE_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float32/1/efficientdet_lite0.tflite"
 if not os.path.exists(PHONE_MODEL_PATH):
-    print("Downloading ObjectDetector model...")
-    try:
-        urllib.request.urlretrieve(PHONE_MODEL_URL, PHONE_MODEL_PATH)
-    except Exception as e:
-        print(f"Failed to download phone detector: {e}")
+    raise FileNotFoundError("efficientdet_lite0.tflite not found - download it during build (see release.yml)")
 
 VIDEO_PATH = resource_path("video.mp4")
 DISTRACTION_SECONDS = 1.5

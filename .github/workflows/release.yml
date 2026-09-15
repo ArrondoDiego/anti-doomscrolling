@@ -5,65 +5,82 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            artifact: Doomscroll-linux
-            target: Doomscroll
-          - os: macos-latest
-            artifact: Doomscroll-macos
-            target: Doomscroll.app
-    runs-on: ${{ matrix.os }}
+  build-macos:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install system dependencies
+        run: |
+          brew install sdl2 sdl2_mixer ffmpeg pkg-config
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pyinstaller
+      - name: Download MediaPipe models
+        run: |
+          curl -L "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task" -o face_landmarker.task
+          curl -L "https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float32/1/efficientdet_lite0.tflite" -o efficientdet_lite0.tflite
+      - name: Verify build files
+        run: |
+          ls -lh
+          test -f face_landmarker.task
+          test -f efficientdet_lite0.tflite
+          test -f video.mp4
+      - name: Build macOS app
+        run: pyinstaller --clean --noconfirm doomscroll.spec
+      - name: Verify app
+        run: |
+          test -d "dist/Doomscroll.app"
+          ls -lah "dist/Doomscroll.app"
+      - name: Package app
+        run: ditto -c -k --sequesterRsrc --keepParent "dist/Doomscroll.app" "Doomscroll-macos-arm64.zip"
+      - name: Upload macOS app
+        uses: actions/upload-artifact@v4
+        with:
+          name: Doomscroll-macos-arm64
+          path: Doomscroll-macos-arm64.zip
+
+  build-linux:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-      - name: System deps Linux
-        if: runner.os == 'Linux'
+          python-version: "3.12"
+      - name: System deps
         run: sudo apt-get update && sudo apt-get install -y libsdl2-dev libsdl2-mixer-dev ffmpeg pkg-config
-      - name: System deps macOS
-        if: runner.os == 'macOS'
-        run: brew install sdl2 sdl2_mixer ffmpeg pkg-config || true
       - name: Python deps
         run: |
-          pip install -U pip
-          pip install -r requirements.txt
-          pip install pyinstaller
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pyinstaller
       - name: Download models
         run: |
-          python -c "import urllib.request, os; url='https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task'; path='face_landmarker.task'; print('face', url); urllib.request.urlretrieve(url, path) if not os.path.exists(path) else print('face exists')"
-          python -c "import urllib.request, os; url='https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float32/1/efficientdet_lite0.tflite'; path='efficientdet_lite0.tflite'; print('phone', url); urllib.request.urlretrieve(url, path) if not os.path.exists(path) else print('phone exists')"
-          ls -lh *.task *.tflite || true
+          curl -L "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task" -o face_landmarker.task
+          curl -L "https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float32/1/efficientdet_lite0.tflite" -o efficientdet_lite0.tflite
       - name: Build
+        run: pyinstaller --clean --noconfirm doomscroll.spec
+      - name: Package
         run: |
-          pyinstaller --clean --noconfirm doomscroll.spec
-          ls -R dist
-      - name: Package Linux
-        if: runner.os == 'Linux'
-        run: |
-          cd dist && tar czf ../${{ matrix.artifact }}.tar.gz ${{ matrix.target }} && cd ..
+          cd dist && tar czf ../Doomscroll-linux.tar.gz Doomscroll && cd ..
           ls -lh *.tar.gz
-      - name: Package macOS
-        if: runner.os == 'macOS'
-        run: |
-          cd dist && ditto -c -k --sequesterRsrc --keepParent "${{ matrix.target }}" ../${{ matrix.artifact }}.zip && cd ..
-          cd dist && tar czf ../${{ matrix.artifact }}.tar.gz "${{ matrix.target }}" && cd ..
-          ls -lh *.zip *.tar.gz
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
-          path: |
-            ${{ matrix.artifact }}.zip
-            ${{ matrix.artifact }}.tar.gz
+          name: Doomscroll-linux
+          path: Doomscroll-linux.tar.gz
 
   release:
-    needs: build
+    needs: [build-macos, build-linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - uses: actions/download-artifact@v4
         with:

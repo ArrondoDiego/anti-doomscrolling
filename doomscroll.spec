@@ -47,6 +47,7 @@ app = BUNDLE(
     name='Doomscroll.app',
     icon=None,
     bundle_identifier='com.doomscroll.app',
+    version='1.0.0',
     info_plist={
         'NSCameraUsageDescription': 'Doomscroll uses the camera to detect distraction',
         'NSHighResolutionCapable': 'True',
