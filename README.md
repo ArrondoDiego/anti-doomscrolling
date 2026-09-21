@@ -1,34 +1,25 @@
 # Doomscroll - Anti Distraction
 
-App that detects when you get distracted (looking down or off-screen) and plays a meme. Regain focus? The video stops.
+App that detects when you get distracted (looking down or off-screen or holding a phone) and plays a meme. Regain focus? The video stops.
 
 ## How it works
-- **MediaPipe Face Landmarker** for face tracking
-- Distracted gaze if: `nose_ratio > 0.68` / `chin.y > 0.85` (looking down) or `h_off > 0.18` (sideways) or face absent
-- After `1.5s` of distraction → `video.mp4` in `MEME ALERT` window
+- **MediaPipe Face Landmarker** & **Object Detector** for distraction and phone detection
+- After `1.5s` of distraction or phone detection → `video.mp4` in `MEME ALERT` window
 - Focus regained → immediate stop
 
-## Usage
+## Usage (macOS App)
+Download `Doomscroll-macos-arm64.zip` (Apple Silicon M1/M2/M3/M4) or `Doomscroll-macos-x86_64.zip` (Intel) from the GitHub Actions artifacts or Releases.
+
+1. Unzip `Doomscroll.app` and move it to `/Applications`.
+2. **First launch (Gatekeeper workaround):** Since the app is self-compiled, macOS may warn that it cannot be opened. Right-click (or Ctrl+click) `Doomscroll.app`, select **Open**, and confirm. Alternatively, run:
+   ```bash
+   xattr -cr /Applications/Doomscroll.app
+   ```
+3. Grant camera access when prompted.
+
+## Development & Local Build
 ```bash
 pip install -r requirements.txt
-python main.py
-# q or X to close
-```
-
-## Build executable (1 command)
-```bash
 ./build.sh
-# output: dist/Doomscroll / dist/Doomscroll.app (on macOS)
+# output: dist/Doomscroll.app
 ```
-Requires building **on Mac** for macOS (`brew install sdl2` handled by the script).
-
-## Repo
-```bash
-git clone <url> && cd doomscroll
-```
-
-## Files
-- `main.py` - app
-- `video.mp4` - meme (replaceable)
-- `doomscroll.spec` - PyInstaller config
-- `face_landmarker.task` - auto-downloaded if missing

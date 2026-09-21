@@ -6,7 +6,14 @@ on:
 
 jobs:
   build-macos:
-    runs-on: macos-14
+    strategy:
+      matrix:
+        include:
+          - os: macos-14
+            artifact: Doomscroll-macos-arm64
+          - os: macos-13
+            artifact: Doomscroll-macos-x86_64
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,12 +46,12 @@ jobs:
           test -d "dist/Doomscroll.app"
           ls -lah "dist/Doomscroll.app"
       - name: Package app
-        run: ditto -c -k --sequesterRsrc --keepParent "dist/Doomscroll.app" "Doomscroll-macos-arm64.zip"
+        run: ditto -c -k --sequesterRsrc --keepParent "dist/Doomscroll.app" "${{ matrix.artifact }}.zip"
       - name: Upload macOS app
         uses: actions/upload-artifact@v4
         with:
-          name: Doomscroll-macos-arm64
-          path: Doomscroll-macos-arm64.zip
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}.zip
 
   build-linux:
     runs-on: ubuntu-latest
