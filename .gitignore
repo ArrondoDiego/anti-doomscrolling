@@ -8,3 +8,4 @@ build/
 .DS_Store
 face_landmarker.task
 efficientdet_lite0.tflite
+GUIDA_MAC.md
