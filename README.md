@@ -22,11 +22,6 @@ python main.py
 ```
 Requires building **on Mac** for macOS (`brew install sdl2` handled by the script).
 
-## Repo
-```bash
-git clone <url> && cd doomscroll
-```
-
 ## Files
 - `main.py` - app
 - `video.mp4` - meme (replaceable)
