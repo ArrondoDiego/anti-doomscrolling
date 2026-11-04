@@ -1,9 +1,15 @@
 import os
 import sys
 import time
+import urllib.request
 import cv2
 from ffpyplayer.player import MediaPlayer
 import mediapipe as mp
+
+MODEL_URLS = {
+    "face_landmarker.task": "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+    "efficientdet_lite0.tflite": "https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float32/1/efficientdet_lite0.tflite",
+}
 
 
 def resource_path(relative_path):
@@ -14,13 +20,26 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 
+def ensure_model(path):
+    if os.path.exists(path):
+        return
+    name = os.path.basename(path)
+    url = MODEL_URLS[name]
+    print(f"Downloading {name}...")
+    try:
+        urllib.request.urlretrieve(url, path)
+    except Exception as e:
+        if os.path.exists(path):
+            os.remove(path)
+        raise FileNotFoundError(f"{name} not found and download failed: {e}") from e
+    print(f"Downloaded {name}")
+
+
 MODEL_PATH = resource_path("face_landmarker.task")
-if not os.path.exists(MODEL_PATH):
-    raise FileNotFoundError("face_landmarker.task not found - download it during build (see release.yml)")
+ensure_model(MODEL_PATH)
 
 PHONE_MODEL_PATH = resource_path("efficientdet_lite0.tflite")
-if not os.path.exists(PHONE_MODEL_PATH):
-    raise FileNotFoundError("efficientdet_lite0.tflite not found - download it during build (see release.yml)")
+ensure_model(PHONE_MODEL_PATH)
 
 VIDEO_PATH = resource_path("video.mp4")
 DISTRACTION_SECONDS = 1.5
