@@ -10,6 +10,7 @@ App that detects when you get distracted (looking down or off-screen) and plays 
 
 ## Usage
 ```bash
+python -m venv .env
 pip install -r requirements.txt
 python main.py
 # q or X to close
