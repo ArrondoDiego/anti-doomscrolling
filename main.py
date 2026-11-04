@@ -24,6 +24,10 @@ if not os.path.exists(PHONE_MODEL_PATH):
 
 VIDEO_PATH = resource_path("video.mp4")
 DISTRACTION_SECONDS = 1.5
+# Keep the meme playing through brief detection dropouts, and never close it
+# in the very same instant it was opened.
+PHONE_GRACE_SECONDS = 1.5
+MIN_MEME_SECONDS = 1.0
 
 # Setup MediaPipe
 BaseOptions = mp.tasks.BaseOptions
@@ -52,6 +56,9 @@ cap.set(cv2.CAP_PROP_FPS, 30)
 cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 last_distracted_time = None
 last_log_time = 0
+last_phone_seen = 0.0
+meme_started_at = 0.0
+meme_frames_shown = 0
 frame_idx = 0
 cached_distracted = False
 cached_h_off = 0.0
@@ -143,8 +150,15 @@ with FaceLandmarker.create_from_options(face_options) as landmarker:
             print(f"[{time.strftime('%H:%M:%S')}] h_off:{h_off:.2f} phone:{phone_detected} distracted:{distracted}")
             last_log_time = time.time()
 
-        phone_should_play = phone_detected
-        should_play = phone_should_play
+        now = time.time()
+        if phone_detected:
+            last_phone_seen = now
+
+        # Detection can flicker from one frame to the next: keep the meme
+        # alive for a grace period (and for a minimum duration) before stopping.
+        phone_recent = is_playing_meme and (now - last_phone_seen <= PHONE_GRACE_SECONDS)
+        just_started = is_playing_meme and (now - meme_started_at < MIN_MEME_SECONDS)
+        should_play = phone_detected or phone_recent or just_started
 
         if should_play and not is_playing_meme:
             print(f"[{time.strftime('%H:%M:%S')}] TRIGGER MEME (PHONE)")
@@ -152,6 +166,8 @@ with FaceLandmarker.create_from_options(face_options) as landmarker:
                 video_cap = cv2.VideoCapture(VIDEO_PATH)
                 audio_player = MediaPlayer(VIDEO_PATH)
                 is_playing_meme = True
+                meme_started_at = now
+                meme_frames_shown = 0
         elif not should_play and is_playing_meme:
             print(f"[{time.strftime('%H:%M:%S')}] STOP MEME (phone put away)")
             if video_cap:
@@ -164,6 +180,7 @@ with FaceLandmarker.create_from_options(face_options) as landmarker:
             except cv2.error:
                 pass
             is_playing_meme = False
+            meme_frames_shown = 0
             last_distracted_time = None
 
         wait_ms = 1
@@ -173,14 +190,17 @@ with FaceLandmarker.create_from_options(face_options) as landmarker:
             audio_frame, val = audio_player.get_frame() if audio_player else (None, 0)
             if v_ret:
                 cv2.imshow("MEME ALERT", v_frame)
+                meme_frames_shown += 1
                 if val != "eof" and val > 0:
                     wait_ms = max(1, int(val * 1000))
             else:
                 # Video ended
                 video_cap.release()
+                video_cap = None
                 audio_player = None
                 cv2.destroyWindow("MEME ALERT")
                 is_playing_meme = False
+                meme_frames_shown = 0
                 last_distracted_time = None
 
         cv2.imshow("Anti Distraction", frame)
@@ -188,14 +208,19 @@ with FaceLandmarker.create_from_options(face_options) as landmarker:
             break
         if cv2.getWindowProperty("Anti Distraction", cv2.WND_PROP_VISIBLE) < 1:
             break
-        if is_playing_meme and cv2.getWindowProperty("MEME ALERT", cv2.WND_PROP_VISIBLE) < 1:
-            cv2.destroyWindow("MEME ALERT")
-            is_playing_meme = False
-            if video_cap:
-                video_cap.release()
-                video_cap = None
-            audio_player = None
-            last_distracted_time = None
+        if is_playing_meme and meme_frames_shown >= 2:
+            try:
+                meme_window_open = cv2.getWindowProperty("MEME ALERT", cv2.WND_PROP_VISIBLE) >= 1
+            except cv2.error:
+                meme_window_open = False
+            if not meme_window_open:
+                cv2.destroyWindow("MEME ALERT")
+                is_playing_meme = False
+                if video_cap:
+                    video_cap.release()
+                    video_cap = None
+                audio_player = None
+                last_distracted_time = None
 
 if phone_detector:
     try:
